@@ -42,7 +42,7 @@ static Sum2033Config panelConfig()
   cfg.width = 32;           // 32 pixels wide = 2 x 16-channel chips
   cfg.scan  = 16;           // 32 rows / 2 rows per address
 
-  cfg.brightness = 63;      // 0-63  (6 bits)
+  cfg.brightness = 16;      // 0-63  (6 bits), 16 ~= 25 % for a dimmer test
   cfg.colorBits = 13;       // 10-13 (2 bits)
   cfg.gclkMultiplier = 16;  // 8 or 16
 
