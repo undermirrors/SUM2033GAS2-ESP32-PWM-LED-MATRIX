@@ -373,6 +373,8 @@ static std::vector<std::pair<int, int> > expectedRuns(int scan, int gpr) {
 static void testAgainstReference() {
   printf("reference (bit-banged driver) vs DMA stream, 64x64, 13 bit, x16\n");
   Sum2033Config cfg;
+  cfg.width = 64;  // the reference bit-banged driver below is 64x64
+  cfg.scan = 32;
   FrameLayout layout;
   CHECK(layout.configure(cfg), "configure");
 

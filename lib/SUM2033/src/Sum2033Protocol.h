@@ -33,31 +33,31 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// Pin numbers are ESP32 GPIOs, -1 = not connected. Defaults are the wiring of the
-// original bit-banged driver (on that panel B and R were swapped).
+// Pin numbers are ESP32 GPIOs, -1 = not connected. Defaults are the rev2.2
+// RGB Matrix Adapter Board (E) with an ESP32-S3-DevKitC-1 (V2.x S3 mapping).
 struct Sum2033Pins {
-  int8_t r1 = 12, g1 = 45, b1 = 13;
-  int8_t r2 = 10, g2 = 41, b2 = 11;
-  int8_t a = 9, b = 38, c = 8, d = 18, e = 39;
-  int8_t clk = 7;
-  int8_t lat = 17;
-  int8_t oe = 14;  // OE is the GCLK input of the SUM2033
+  int8_t r1 = 18, g1 = 8, b1 = 17;
+  int8_t r2 = 16, g2 = 1, b2 = 15;
+  int8_t a = 7, b = 48, c = 6, d = 47, e = 2;
+  int8_t clk = 5;
+  int8_t lat = 21;
+  int8_t oe = 4;  // OE is the GCLK input of the SUM2033
 };
 
 struct Sum2033Config {
   Sum2033Pins pins;
 
-  uint16_t width = 64;  // pixels, 16 per SUM2033 chip (can be larger for chained panels)
-  uint8_t scan = 32;    // multiplexed rows (1/32 scan), panel height = 2 * scan
+  uint16_t width = 32;  // pixels, 16 per SUM2033 chip (can be larger for chained panels)
+  uint8_t scan = 16;    // multiplexed rows (1/16 scan), panel height = 2 * scan
 
   uint8_t colorBits = 13;       // 10..13, PWM depth used by the chip
   uint8_t gclkMultiplier = 16;  // 8 or 16, in-chip GCLK multiplier
   uint8_t brightness = 63;      // 0..63, global brightness register
 
   // Frequency of CLK (one stream word). GCLK runs at half of it. Every refresh
-  // carries a full frame, so this directly sets the refresh rate:
-  // 10 MHz -> ~290 Hz, 16 MHz -> ~465 Hz, 20 MHz -> ~580 Hz (13 bit, x16).
-  // Lower it if you see random speckles (long/bad cables).
+  // carries a full frame, so this directly sets the refresh rate. For a 32x32
+  // panel (scan = 16) 10 MHz is already ~580 Hz (13 bit, x16); lower it if you
+  // see random speckles (long/bad cables).
   uint32_t clockHz = 10000000;
 
   float gamma = 2.4f;  // used for 8 bit input (show(), Sum2033Display)

@@ -12,22 +12,32 @@ This driver is most likely can be used to drive similar SUM20XX panels, i've see
 - The data of the next frame (16 latches per row) is shifted in **while** the GCLK pulses run, so a complete frame is uploaded in every refresh for free. The panel's second frame buffer holds it until the next VSYNC.
 - There are two DMA buffers. You draw/encode into the one that isn't playing; it is linked in exactly at the start of the next refresh, so there is no tearing.
 
-| Panel pin | GPIO (unchanged) | driven by |
+| Panel pin | GPIO (rev2.2 adapter, ESP32-S3-DevKitC-1) | driven by |
 |---|---|---|
-| R1 G1 B1 | 12 45 13 | LCD_DATA_OUT0..2 |
-| R2 G2 B2 | 10 41 11 | LCD_DATA_OUT3..5 |
-| LAT | 17 | LCD_DATA_OUT6 |
-| OE (GCLK) | 14 | LCD_DATA_OUT7 |
-| A B C D E | 9 38 8 18 39 | LCD_DATA_OUT8..12 |
-| CLK | 7 | LCD_PCLK |
+| R1 G1 B1 | 18 8 17 | LCD_DATA_OUT0..2 |
+| R2 G2 B2 | 16 1 15 | LCD_DATA_OUT3..5 |
+| LAT | 21 | LCD_DATA_OUT6 |
+| OE (GCLK) | 4 | LCD_DATA_OUT7 |
+| A B C D E | 7 48 6 47 2 | LCD_DATA_OUT8..12 |
+| CLK | 5 | LCD_PCLK |
 
-| CLK (`clockHz`) | GCLK | refresh = max. frame rate (13 bit, x16) |
-|---|---|---|
-| 10 MHz (default) | 5 MHz | 291 Hz |
-| 16 MHz | 8 MHz | 466 Hz |
-| 20 MHz | 10 MHz | 582 Hz |
+| CLK (`clockHz`) | GCLK | refresh = max. frame rate, 64x64 (13 bit, x16) | 32x32 (13 bit, x16) |
+|---|---|---|---|
+| 10 MHz (default) | 5 MHz | 291 Hz | 581 Hz |
+| 16 MHz | 8 MHz | 466 Hz | 930 Hz |
+| 20 MHz | 10 MHz | 582 Hz | 1162 Hz |
 
-It needs about 135 KB of internal RAM for the two DMA buffers of a 64x64 panel (plus 12 KB for the `Sum2033Display` canvas). Works with Arduino-ESP32 2.0.x (IDF 4.4) and 3.x (IDF 5.x).
+It needs about 135 KB of internal RAM for the two DMA buffers of a 64x64 panel, or about 69 KB for a 32x32 panel (plus 12 KB / 3 KB for the `Sum2033Display` canvas). Works with Arduino-ESP32 2.0.x (IDF 4.4) and 3.x (IDF 5.x).
+
+> **32x32 / 1/4-scan modules:** this driver assumes the standard HUB75
+> arrangement where each row address lights **two** physical rows (R1/G1/B1 and
+> R2/G2/B2). A 32x32 panel driven that way has `scan = 16` (height = 2 × scan).
+> Panels sold as **1/4 scan** light four rows per address and use a different
+> internal row/pixel mapping; they are not supported by this SUM2033 driver as
+> is. If your module is 1/4 scan, use a HUB75 library with 1/4-scan mapping
+> (for example `ESP32-HUB75-MatrixPanel-DMA` or `esphome-libs/esp-hub75`)
+> instead, or check the driver IC on the back: this library only speaks the
+> SUM2033 protocol.
 
 ### Usage
 
@@ -36,7 +46,7 @@ With the Adafruit_GFX canvas (see `src/main.cpp` for a complete demo):
 ```cpp
 #include <Sum2033Display.h>
 
-Sum2033Display display(64, 64);
+Sum2033Display display(32, 32);
 
 void setup() {
   Sum2033Config cfg;         // defaults: the wiring above, 13 bit, x16, brightness 63

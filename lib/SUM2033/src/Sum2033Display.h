@@ -6,8 +6,8 @@
 // long as one panel refresh at most), so you can start the next frame right
 // away.
 //
-//   Sum2033Display display;          // 64x64
-//   display.begin();                 // default config = original wiring
+//   Sum2033Display display;          // 32x32
+//   display.begin();                 // default config = rev2.2 adapter wiring
 //   display.fillScreen(0);
 //   display.print("Hi");
 //   display.flip();
@@ -20,7 +20,7 @@
 
 class Sum2033Display : public Adafruit_GFX {
  public:
-  explicit Sum2033Display(uint16_t width = 64, uint16_t height = 64);
+  explicit Sum2033Display(uint16_t width = 32, uint16_t height = 32);
   ~Sum2033Display();
 
   // config.width and config.scan are taken from the canvas size.

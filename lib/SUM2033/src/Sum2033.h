@@ -8,8 +8,8 @@
 // start of a refresh (no tearing).
 //
 //   Sum2033 panel;
-//   panel.begin();                       // default config = original wiring
-//   panel.show(rgb888);                  // 64x64x3 bytes, gamma corrected
+//   panel.begin();                       // default config = rev2.2 adapter wiring
+//   panel.show(rgb888);                  // 32x32x3 bytes, gamma corrected
 //   panel.render([](int x, int y) {      // or compute pixels directly,
 //     return sum2033::Rgb16{...};        // 16 bit linear per channel
 //   });
@@ -35,7 +35,7 @@ class Sum2033 {
   Sum2033(const Sum2033&) = delete;
   Sum2033& operator=(const Sum2033&) = delete;
 
-  // Allocates the DMA buffers (~135 KB of internal RAM for 64x64), configures
+  // Allocates the DMA buffers (~69 KB of internal RAM for 32x32), configures
   // the panel pins and starts refreshing (black). Returns false on bad config
   // or when out of memory.
   bool begin(const Sum2033Config& config = Sum2033Config());

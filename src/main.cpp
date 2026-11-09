@@ -1,48 +1,68 @@
 #include <Arduino.h>
 #include <Sum2033Display.h>
 
-// Wiring is the same as in the bit-banged version (on my matrix B and R
-// channels were swapped places). These are also the library defaults.
+// Target panel: 32x32 P6 RGB module, HUB75 wiring.
+//
+// NOTE ON SCAN MODE: this driver lights 2 physical rows per row address
+// (R1/G1/B1 + R2/G2/B2), which is the standard HUB75 arrangement. A 32x32
+// panel driven that way has 16 row addresses (height = 2 * scan), so the
+// config below uses scan = 16. If your module is really a 1/4-scan module
+// (4 rows lit per address), it needs a different row/pixel mapping and this
+// SUM2033 driver cannot drive it correctly as-is; see the README.
+//
+// Wiring: Seengreat / Waveshare-style RGB Matrix Adapter Board (E), rev2.2,
+// with an ESP32-S3-DevKitC-1. This is the V2.x S3 pin mapping from the board
+// documentation:
+//
+//   R1=18  G1=8   B1=17
+//   R2=16  G2=1   B2=15
+//   A=7    B=48   C=6   D=47   E=2
+//   CLK=5  LAT=21 OE=4 (OE is the GCLK input of the SUM2033)
 static Sum2033Config panelConfig()
 {
   Sum2033Config cfg;
-  cfg.pins.b1 = 13;
-  cfg.pins.b2 = 11;
-  cfg.pins.g1 = 45;
-  cfg.pins.g2 = 41;
-  cfg.pins.r1 = 12;
-  cfg.pins.r2 = 10;
+  cfg.pins.r1 = 18;
+  cfg.pins.g1 = 8;
+  cfg.pins.b1 = 17;
+  cfg.pins.r2 = 16;
+  cfg.pins.g2 = 1;
+  cfg.pins.b2 = 15;
 
-  cfg.pins.a = 9;
-  cfg.pins.b = 38;
-  cfg.pins.c = 8;
-  cfg.pins.d = 18;
-  cfg.pins.e = 39;
+  cfg.pins.a = 7;
+  cfg.pins.b = 48;
+  cfg.pins.c = 6;
+  cfg.pins.d = 47;
+  cfg.pins.e = 2;
 
-  cfg.pins.clk = 7;
-  cfg.pins.lat = 17;
-  cfg.pins.oe  = 14; /* also GCLK */
+  cfg.pins.clk = 5;
+  cfg.pins.lat = 21;
+  cfg.pins.oe  = 4; /* also GCLK */
+
+  cfg.width = 32;           // 32 pixels wide = 2 x 16-channel chips
+  cfg.scan  = 16;           // 32 rows / 2 rows per address
 
   cfg.brightness = 63;      // 0-63  (6 bits)
   cfg.colorBits = 13;       // 10-13 (2 bits)
   cfg.gclkMultiplier = 16;  // 8 or 16
 
   // Every panel refresh also uploads a complete frame, so this sets both the
-  // refresh rate and the max frame rate: 10 MHz ~290 Hz, 16 MHz ~465 Hz,
-  // 20 MHz ~580 Hz. Go lower if you see random speckles.
+  // refresh rate and the max frame rate. For a 32x32 panel 10 MHz is already
+  // ~580 Hz; go lower if you see random speckles.
   cfg.clockHz = 10000000;
   return cfg;
 }
 
-Sum2033Display display(64, 64);
+Sum2033Display display(32, 32);
 
 // Same colorful RG gradient as the original test code, 16 bit per channel,
 // rendered straight into the DMA buffer without a framebuffer.
 static void showTestGradient()
 {
   auto gamma16 = [](float v) { return uint16_t(powf(v / 65535.0f, 2.4f) * 65535.0f); };
+  const float xStep = 65535.0f / (display.width() - 1);
+  const float yStep = 65535.0f / (display.height() - 1);
   display.panel().render([&](int x, int y) -> sum2033::Rgb16 {
-    return {gamma16(x * 1040), gamma16(y * 1040), 0};
+    return {gamma16(x * xStep), gamma16(y * yStep), 0};
   });
 }
 
