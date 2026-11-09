@@ -15,13 +15,16 @@ void expand565(uint16_t color, uint8_t* rgb) {
 
 }  // namespace
 
-Sum2033Display::Sum2033Display(uint16_t width, uint16_t height, bool fourScan)
-    : Adafruit_GFX(width, height), fourScan_(fourScan) {}
+Sum2033Display::Sum2033Display(uint16_t width, uint16_t height, bool fourScan, uint8_t chainLength)
+    : Adafruit_GFX(width, height),
+      fourScan_(fourScan),
+      chainLength_(chainLength ? chainLength : 1) {}
 
 Sum2033Display::~Sum2033Display() { end(); }
 
 bool Sum2033Display::begin(Sum2033Config config) {
   end();
+  if (chainLength_ == 0 || WIDTH % chainLength_ != 0) return false;
   if (fourScan_) {
     // 1/4 scan: the DMA buffer is twice as wide and half as high as the panel.
     if (HEIGHT % 4 != 0) return false;
@@ -58,22 +61,28 @@ void Sum2033Display::flip() {
   }
 
   // Four-scan mapping (FOUR_SCAN_32PX_HIGH). The DMA frame is WIDTH*2 wide and
-  // HEIGHT/2 high (scan = HEIGHT/4 row addresses, two DMA rows each). A DMA row
-  // holds two physical rows side by side: the left half feeds one row and the
-  // right half the other. Invert that to read the 32x32 canvas.
+  // HEIGHT/2 high (scan = HEIGHT/4 row addresses, two DMA rows each). Each
+  // panel occupies 2 * panelW DMA columns; inside a panel a DMA row holds two
+  // physical rows side by side (left half = one row, right half = the other).
+  // Invert that to read the canvas.
   const uint8_t* fb = fb_;
-  const int w = WIDTH;
+  const int totalW = WIDTH;
+  const int panelW = WIDTH / chainLength_;
+  const int dmaPanelW = panelW * 2;
   const int scan = HEIGHT / 4;
-  panel_.render([this, fb, w, scan](int dx, int dy) -> sum2033::Rgb16 {
-    const bool right = dx >= w;
-    const int x = right ? dx - w : dx;
+  panel_.render([this, fb, totalW, panelW, dmaPanelW, scan](int dx, int dy) -> sum2033::Rgb16 {
+    const int panel = dx / dmaPanelW;
+    const int local = dx % dmaPanelW;
+    const bool right = local >= panelW;
+    const int xLocal = right ? local - panelW : local;
     int y;
     if (dy < scan) {
       y = right ? dy : dy + scan;
     } else {
       y = right ? dy + scan : dy + 2 * scan;
     }
-    const uint8_t* p = fb + (size_t(y) * w + x) * 3;
+    const int x = panel * panelW + xLocal;
+    const uint8_t* p = fb + (size_t(y) * totalW + x) * 3;
     return sum2033::Rgb16{panel_.toLinear(p[0]), panel_.toLinear(p[1]), panel_.toLinear(p[2])};
   });
 }

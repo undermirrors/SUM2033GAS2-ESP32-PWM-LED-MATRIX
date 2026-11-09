@@ -1,13 +1,12 @@
 #include <Arduino.h>
 #include <Sum2033Display.h>
 
-// Minimal bring-up test: fill the whole panel green, then red, then blue.
+// Two 32x32 P6 RGB modules (1/4 scan) chained horizontally: 64x32 canvas.
+// RGB color bands scroll horizontally.
 //
-// Target panel: 32x32 P6 RGB module, 1/4 scan (four-scan), HUB75 wiring.
-//
-// Four-scan is handled by Sum2033Display (third constructor argument = true):
-// the driver is configured for a 64x16 DMA frame (8 row addresses, 4 physical
-// rows lit per address) and flip() maps the 32x32 canvas onto it.
+// Four-scan is handled by Sum2033Display (fourScan = true, chainLength = 2):
+// the driver is configured for a 128x16 DMA frame (8 row addresses, 4 physical
+// rows lit per address) and flip() maps the 64x32 canvas onto it.
 //
 // Wiring: Seengreat / Waveshare-style RGB Matrix Adapter Board (E), rev2.2,
 // with an ESP32-S3-DevKitC-1. This is the V2.x S3 pin mapping from the board
@@ -38,20 +37,20 @@ static Sum2033Config panelConfig()
   cfg.pins.oe  = 4; /* also GCLK */
 
   // width and scan are set by Sum2033Display::begin() from the canvas size:
-  // four-scan 32x32 -> DMA 64x16, scan = 8 (8 row addresses).
+  // two four-scan 32x32 panels -> DMA 128x16, scan = 8 (8 row addresses).
 
   cfg.brightness = 16;      // 0-63  (6 bits), 16 ~= 25 % for a dimmer test
   cfg.colorBits = 13;       // 10-13 (2 bits)
   cfg.gclkMultiplier = 16;  // 8 or 16
 
   // Every panel refresh also uploads a complete frame, so this sets both the
-  // refresh rate and the max frame rate. For a 32x32 panel 10 MHz is already
-  // ~580 Hz; go lower if you see random speckles.
+  // refresh rate and the max frame rate. Lower it if you see random speckles.
   cfg.clockHz = 10000000;
   return cfg;
 }
 
-Sum2033Display display(32, 32, /*fourScan=*/true);
+// 64x32 canvas: two 32x32 four-scan panels chained horizontally.
+Sum2033Display display(64, 32, /*fourScan=*/true, /*chainLength=*/2);
 
 void setup()
 {
@@ -65,21 +64,29 @@ void setup()
   }
 
   Sum2033& panel = display.panel();
-  Serial.printf("SUM2033: CLK %u Hz, refresh %.1f Hz, DMA memory %u bytes\n",
-                unsigned(panel.clockHz()), panel.refreshRate(), unsigned(panel.memoryUsage()));
+  Serial.printf("SUM2033: %dx%d canvas, CLK %u Hz, refresh %.1f Hz, DMA memory %u bytes\n",
+                display.width(), display.height(), unsigned(panel.clockHz()),
+                panel.refreshRate(), unsigned(panel.memoryUsage()));
 }
 
 void loop()
 {
   static const uint16_t colors[] = {
-      Sum2033Display::color565(0, 255, 0),    // green
       Sum2033Display::color565(255, 0, 0),    // red
+      Sum2033Display::color565(0, 255, 0),    // green
       Sum2033Display::color565(0, 0, 255),    // blue
   };
+  static const int kBandWidth = 16;  // pixels per color band
+  static int offset = 0;
 
-  for (uint16_t color : colors) {
-    display.fillScreen(color);
-    display.flip();
-    delay(1000);
+  const int w = display.width();
+  const int h = display.height();
+  for (int x = 0; x < w; ++x) {
+    const int band = ((x + offset) / kBandWidth) % 3;
+    display.drawFastVLine(x, 0, h, colors[band]);
   }
+  display.flip();
+
+  offset = (offset + 1) % (kBandWidth * 3);
+  delay(30);
 }
