@@ -141,9 +141,15 @@ static void onEventsCallback(WebsocketsEvent event, String data) {
   }
 }
 
-static void connectWebSocket() {
+static uint32_t lastReconnectAttempt = 0;
+
+static bool connectWebSocket() {
   Serial.printf("WS connecting to ws://%s:%u%s\n", kServerHost, kServerPort, kServerPath);
-  webSocket.connect(kServerHost, kServerPort, kServerPath);
+  if (!webSocket.connect(kServerHost, kServerPort, kServerPath)) {
+    Serial.println("WS connect failed");
+    return false;
+  }
+  return true;
 }
 
 void setup()
@@ -185,7 +191,13 @@ void setup()
 
   webSocket.onMessage(onMessageCallback);
   webSocket.onEvent(onEventsCallback);
-  connectWebSocket();
+
+  // Retry a few times: the first handshake occasionally fails on ESP32.
+  for (uint8_t attempt = 0; attempt < 5; ++attempt) {
+    if (connectWebSocket()) break;
+    delay(2000);
+  }
+  lastReconnectAttempt = millis();
 }
 
 void loop()
@@ -198,12 +210,17 @@ void loop()
 
   if (webSocket.available()) {
     webSocket.poll();
-  } else {
-    // Reconnect every 5 s while the server is unreachable.
-    static uint32_t lastReconnectAttempt = 0;
-    if (millis() - lastReconnectAttempt > 5000) {
-      lastReconnectAttempt = millis();
-      connectWebSocket();
-    }
+    lastReconnectAttempt = millis();
+    return;
   }
+
+  // Wait 5 s after the last successful poll before reconnecting. Opening a
+  // new socket while the server still has the old one registered makes the
+  // server drop its frame sender (it stores only one), so the new connection
+  // would never receive frames.
+  if (millis() - lastReconnectAttempt > 5000) {
+    lastReconnectAttempt = millis();
+    connectWebSocket();
+  }
+  delay(10);
 }
