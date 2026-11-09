@@ -3,13 +3,11 @@
 
 // Minimal bring-up test: fill the whole panel green, then red, then blue.
 //
-// Target panel: 32x32 P6 RGB module, HUB75 wiring.
+// Target panel: 32x32 P6 RGB module, 1/4 scan (four-scan), HUB75 wiring.
 //
-// NOTE ON SCAN MODE: this driver lights 2 physical rows per row address
-// (R1/G1/B1 + R2/G2/B2), which is the standard HUB75 arrangement. A 32x32
-// panel driven that way has 16 row addresses (height = 2 * scan), so the
-// config below uses scan = 16. A true 1/4-scan module (4 rows lit per
-// address) needs a different driver; see the README.
+// Four-scan is handled by Sum2033Display (third constructor argument = true):
+// the driver is configured for a 64x16 DMA frame (8 row addresses, 4 physical
+// rows lit per address) and flip() maps the 32x32 canvas onto it.
 //
 // Wiring: Seengreat / Waveshare-style RGB Matrix Adapter Board (E), rev2.2,
 // with an ESP32-S3-DevKitC-1. This is the V2.x S3 pin mapping from the board
@@ -39,8 +37,8 @@ static Sum2033Config panelConfig()
   cfg.pins.lat = 21;
   cfg.pins.oe  = 4; /* also GCLK */
 
-  cfg.width = 32;           // 32 pixels wide = 2 x 16-channel chips
-  cfg.scan  = 16;           // 32 rows / 2 rows per address
+  // width and scan are set by Sum2033Display::begin() from the canvas size:
+  // four-scan 32x32 -> DMA 64x16, scan = 8 (8 row addresses).
 
   cfg.brightness = 16;      // 0-63  (6 bits), 16 ~= 25 % for a dimmer test
   cfg.colorBits = 13;       // 10-13 (2 bits)
@@ -53,7 +51,7 @@ static Sum2033Config panelConfig()
   return cfg;
 }
 
-Sum2033Display display(32, 32);
+Sum2033Display display(32, 32, /*fourScan=*/true);
 
 void setup()
 {
