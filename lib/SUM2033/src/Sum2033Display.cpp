@@ -60,31 +60,42 @@ void Sum2033Display::flip() {
     return;
   }
 
-  // Four-scan mapping (FOUR_SCAN_32PX_HIGH). The DMA frame is WIDTH*2 wide and
-  // HEIGHT/2 high (scan = HEIGHT/4 row addresses, two DMA rows each). Each
-  // panel occupies 2 * panelW DMA columns; inside a panel a DMA row holds two
-  // physical rows side by side (left half = one row, right half = the other).
-  // Invert that to read the canvas.
+  // Four-scan mapping. The DMA frame is WIDTH*2 wide and HEIGHT/2 high
+  // (scan = HEIGHT/4 row addresses, two DMA rows each). Each panel occupies
+  // 2 * panelW DMA columns; fourScanMap_ says which canvas pixel every one of
+  // them shows (default: FOUR_SCAN_32PX_HIGH, see defaultFourScanMap()).
   const uint8_t* fb = fb_;
   const int totalW = WIDTH;
+  const int totalH = HEIGHT;
   const int panelW = WIDTH / chainLength_;
   const int dmaPanelW = panelW * 2;
   const int scan = HEIGHT / 4;
-  panel_.render([this, fb, totalW, panelW, dmaPanelW, scan](int dx, int dy) -> sum2033::Rgb16 {
+  const FourScanMap map = fourScanMap_;
+  panel_.render([this, fb, totalW, totalH, panelW, dmaPanelW, scan, map](int dx, int dy) -> sum2033::Rgb16 {
     const int panel = dx / dmaPanelW;
-    const int local = dx % dmaPanelW;
-    const bool right = local >= panelW;
-    const int xLocal = right ? local - panelW : local;
-    int y;
-    if (dy < scan) {
-      y = right ? dy : dy + scan;
-    } else {
-      y = right ? dy + scan : dy + 2 * scan;
+    int x = 0, y = 0;
+    if (!map(dx - panel * dmaPanelW, dy, panelW, scan, x, y) || x < 0 || x >= panelW || y < 0 ||
+        y >= totalH) {
+      return sum2033::Rgb16{0, 0, 0};
     }
-    const int x = panel * panelW + xLocal;
+    x += panel * panelW;
     const uint8_t* p = fb + (size_t(y) * totalW + x) * 3;
     return sum2033::Rgb16{panel_.toLinear(p[0]), panel_.toLinear(p[1]), panel_.toLinear(p[2])};
   });
+}
+
+bool Sum2033Display::defaultFourScanMap(int dx, int dy, int panelW, int scan, int& x, int& y) {
+  // Inside a panel a DMA row holds two physical rows side by side: the first
+  // panelW pixels shifted belong to row address + scan, the second panelW to
+  // row address (same as FOUR_SCAN_32PX_HIGH of ESP32-HUB75-MatrixPanel-DMA).
+  const bool second = dx >= panelW;
+  x = second ? dx - panelW : dx;
+  if (dy < scan) {
+    y = second ? dy : dy + scan;
+  } else {
+    y = second ? dy + scan : dy + 2 * scan;
+  }
+  return true;
 }
 
 uint8_t* Sum2033Display::pixelAt(int16_t x, int16_t y) {

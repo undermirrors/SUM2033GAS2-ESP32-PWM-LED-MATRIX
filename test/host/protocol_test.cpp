@@ -13,6 +13,7 @@
 //   g++ -std=c++11 -O2 -Wall -Wextra -Ilib/SUM2033/src test/host/protocol_test.cpp
 //       lib/SUM2033/src/Sum2033Protocol.cpp -o protocol_test && ./protocol_test
 
+#include <algorithm>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -519,8 +520,80 @@ static void testInvalid() {
   CHECK(!layout.configure(cfg), "scan 33");
 }
 
+// REG2 scan field / raw register overrides (SUM2030): only the register values
+// change, the rest of the stream stays identical.
+static void testRegisterOverrides() {
+  printf("register overrides (32x32 four-scan: 64x16, scan 8, 10 bit, x8)\n");
+  Sum2033Config cfg;
+  cfg.width = 64;
+  cfg.scan = 8;
+  cfg.colorBits = 10;
+  cfg.gclkMultiplier = 8;
+  const uint8_t brightness = 16;
+  auto img = [](int x, int y) {
+    const Rgb16 c = {uint16_t(x * 1000), uint16_t(y * 3000), uint16_t((x ^ y) * 500)};
+    return c;
+  };
+
+  FrameLayout layout;
+  CHECK(layout.configure(cfg), "configure");
+  CHECK(layout.scanField() == 7, "default scan field %d", layout.scanField());
+  const Frame ref = buildFrame(layout, brightness, img);
+
+  auto play = [&](const Frame& f, PanelModel& model) {
+    StreamPlayer player(model);
+    player.play(&f.words[0], f.words.size());
+    player.play(&f.words[0], f.words.size());
+    player.play(&f.words[0], f.headerWords);
+  };
+  auto sameRows = [&](const Frame& f) {
+    return std::equal(f.words.begin() + f.headerWords, f.words.end(), ref.words.begin() + ref.headerWords);
+  };
+  const uint16_t depth = uint16_t((~(10 - 10) & 3) << 11);
+
+  // Explicit scan field from the config.
+  cfg.scanField = 15;
+  FrameLayout forced;
+  CHECK(forced.configure(cfg), "configure scanField");
+  Frame f = buildFrame(forced, brightness, img);
+  CHECK(f.words.size() == ref.words.size() && sameRows(f), "rows changed by scanField");
+  {
+    PanelModel model(4, 8);
+    play(f, model);
+    CHECK(model.regs[1] == uint16_t(16 | (15 << 6) | depth), "reg2 0x%04x", model.regs[1]);
+    CHECK(model.regs[0] == 0 && model.regs[2] == (1 << 4), "reg1/reg3 0x%04x 0x%04x", model.regs[0], model.regs[2]);
+  }
+
+  // Runtime changes on the default layout, then back to the default.
+  layout.setScanField(3);
+  f = buildFrame(layout, brightness, img);
+  {
+    PanelModel model(4, 8);
+    play(f, model);
+    CHECK(model.regs[1] == uint16_t(16 | (3 << 6) | depth), "reg2 0x%04x", model.regs[1]);
+  }
+  layout.setRegOverride(1, 0x0004);
+  layout.setRegOverride(2, 0xABCD);
+  layout.setRegOverride(3, 0x0014);
+  f = buildFrame(layout, brightness, img);
+  CHECK(sameRows(f), "rows changed by register overrides");
+  {
+    PanelModel model(4, 8);
+    play(f, model);
+    CHECK(model.regs[0] == 0x0004 && model.regs[1] == 0xABCD && model.regs[2] == 0x0014,
+          "raw regs 0x%04x 0x%04x 0x%04x", model.regs[0], model.regs[1], model.regs[2]);
+  }
+  layout.setScanField(-1);
+  for (int r = 1; r <= 3; ++r) layout.setRegOverride(r, -1);
+  f = buildFrame(layout, brightness, img);
+  CHECK(f.words == ref.words, "stream not restored after clearing the overrides");
+}
+
 int main() {
   setvbuf(stdout, NULL, _IONBF, 0);
+  testRegisterOverrides();
+  testConfig(64, 8, 10, 8, true, 1, 8, 16);   // 32x32 four-scan, SUM2030 settings
+  testConfig(64, 8, 10, 8, false, 1, 8, 16);
   testAgainstReference();
   for (int bits = 10; bits <= 13; ++bits)
     for (int mul = 8; mul <= 16; mul += 8)

@@ -61,6 +61,18 @@ class Sum2033Display : public Adafruit_GFX {
 
   Sum2033& panel() { return panel_; }
 
+  // Four-scan pixel mapping of ONE panel: DMA pixel (dx, dy) of that panel's
+  // slice of the stream (dx = 0 .. 2*panelW-1 in shift order, dy = 0 .. 2*scan-1,
+  // dy < scan is R1/G1/B1 with row address dy, dy >= scan is R2/G2/B2 with row
+  // address dy - scan) -> canvas pixel (x, y) of that panel. Return false to
+  // leave the LED black. Panels of a chain are handled by flip().
+  using FourScanMap = bool (*)(int dx, int dy, int panelW, int scan, int& x, int& y);
+  // Default: FOUR_SCAN_32PX_HIGH of ESP32-HUB75-MatrixPanel-DMA (rows 0..scan-1
+  // in the second half of the slice, rows scan..2*scan-1 in the first half).
+  static bool defaultFourScanMap(int dx, int dy, int panelW, int scan, int& x, int& y);
+  // nullptr restores the default. Takes effect with the next flip().
+  void setFourScanMap(FourScanMap map) { fourScanMap_ = map ? map : defaultFourScanMap; }
+
   static uint16_t color565(uint8_t r, uint8_t g, uint8_t b) {
     return uint16_t(((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3));
   }
@@ -72,4 +84,5 @@ class Sum2033Display : public Adafruit_GFX {
   uint8_t* fb_ = nullptr;
   bool fourScan_ = false;
   uint8_t chainLength_ = 1;
+  FourScanMap fourScanMap_ = defaultFourScanMap;
 };

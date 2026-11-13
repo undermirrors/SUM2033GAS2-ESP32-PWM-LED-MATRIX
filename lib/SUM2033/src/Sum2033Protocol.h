@@ -75,6 +75,22 @@ struct Sum2033Config {
   // false: shift each row after its GCLK pulses, with GCLK stopped, exactly like
   //        the original bit-banged driver did (slower refresh, fallback).
   bool shiftDuringPwm = true;
+
+  // --- Config registers (other SUM20xx chips) ------------------------------------
+  // Value written to the 5 bit "scan lines" field of REG2 (bits 6..10).
+  // -1 = scan - 1, which is what the SUM2033 expects. The SUM2033 layout was
+  // only ever verified with 1/32 scan (all ones), and the SUM2030GAS2 (max
+  // 1/16 scan) seems to read this field differently: if the chip wraps its
+  // rows too early (e.g. only half of the row addresses light, each one
+  // repeated 4 rows further), set this explicitly. Use the sweep of the
+  // diagnostic sketch (src/main.cpp) to find the right value. This only changes
+  // the register, not the stream geometry (width/scan stay as they are).
+  int8_t scanField = -1;
+  // Raw register values, -1 = computed (REG1 = 0, REG2 from brightness/scan/
+  // colorBits, REG3 from gclkMultiplier). A raw REG2 also replaces brightness.
+  int32_t reg1Override = -1;
+  int32_t reg2Override = -1;
+  int32_t reg3Override = -1;
 };
 
 namespace sum2033 {
@@ -142,10 +158,22 @@ class FrameLayout {
   size_t dataOffset() const { return dataOffset_; }  // first data word inside a row
   size_t dataWords() const { return dataWords_; }    // data words per row
 
-  // Register values sent in every header (same as the bit-banged driver).
-  uint16_t reg1() const { return 0; }
+  // Register values sent in every header (same as the bit-banged driver unless
+  // overridden, see Sum2033Config::scanField / regNOverride).
+  uint16_t reg1() const { return regOverride_[0] >= 0 ? uint16_t(regOverride_[0]) : 0; }
   uint16_t reg2(uint8_t brightness) const;
   uint16_t reg3() const;
+
+  // Value of the REG2 scan field actually sent (scanField or scan - 1).
+  int scanField() const { return scanField_ >= 0 ? scanField_ : scan_ - 1; }
+  // Change the register values sent by the next writeHeader() (-1 = computed).
+  // No effect on the stream geometry, safe to call while running.
+  void setScanField(int value) { scanField_ = value < 0 ? -1 : (value & 0x1F); }
+  // reg = 1..3.
+  void setRegOverride(int reg, int32_t value) {
+    if (reg >= 1 && reg <= 3) regOverride_[reg - 1] = value < 0 ? -1 : (value & 0xFFFF);
+  }
+  int32_t regOverride(int reg) const { return reg >= 1 && reg <= 3 ? regOverride_[reg - 1] : -1; }
 
   // Config register writes + VSYNC.
   void writeHeader(uint16_t* dst, uint8_t brightness) const;
@@ -175,6 +203,8 @@ class FrameLayout {
   size_t blankWords_ = 0, gapWords_ = 0, pwmWords_ = 0;
   size_t dataOffset_ = 0, dataWords_ = 0, rowWords_ = 0;
   bool shiftDuringPwm_ = true;
+  int scanField_ = -1;
+  int32_t regOverride_[3] = {-1, -1, -1};
   // GCLK/LAT bits of the data words of a row (row address not included).
   uint32_t* dataTemplate_ = nullptr;
   // Pixel values of the row being encoded, in shift order.

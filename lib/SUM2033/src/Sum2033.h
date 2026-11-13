@@ -75,6 +75,16 @@ class Sum2033 {
   // 8 bit value -> 16 bit linear value with the current gamma.
   uint16_t toLinear(uint8_t v) const { return gamma_[v]; }
 
+  // Config registers (see Sum2033Config::scanField / regNOverride). Applied
+  // with the next frame; call refresh() to apply them without redrawing.
+  void setScanField(int value) { layout_.setScanField(value); }  // -1 = scan - 1
+  int scanField() const { return layout_.scanField(); }
+  void setRegOverride(int reg, int32_t value) { layout_.setRegOverride(reg, value); }  // reg 1..3
+  // Register value sent with the next frame, reg = 1..3.
+  uint16_t regValue(int reg) const {
+    return reg == 1 ? layout_.reg1() : reg == 2 ? layout_.reg2(brightness_) : layout_.reg3();
+  }
+
   // --- Timing -----------------------------------------------------------------
   // Waits for the start of the next panel refresh.
   bool waitVSync(uint32_t timeoutMs = 100);

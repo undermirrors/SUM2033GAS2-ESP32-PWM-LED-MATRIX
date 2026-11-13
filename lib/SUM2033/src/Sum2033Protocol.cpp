@@ -58,6 +58,10 @@ bool FrameLayout::configure(const Sum2033Config& cfg) {
   gclkPerRow_ = (1 << colorBits_) / gclkMultiplier_;
   gclkHalfPeriod_ = cfg.gclkHalfPeriod;
   shiftDuringPwm_ = cfg.shiftDuringPwm;
+  setScanField(cfg.scanField);
+  setRegOverride(1, cfg.reg1Override);
+  setRegOverride(2, cfg.reg2Override);
+  setRegOverride(3, cfg.reg3Override);
 
   const size_t latchWords = size_t(chips_) * kBitsPerChannel;
   headerWords_ = roundUpEven(kGuardWords + 3 * (kCmdPreActive + latchWords + kGuardWords) +
@@ -102,13 +106,15 @@ bool FrameLayout::configure(const Sum2033Config& cfg) {
 }
 
 uint16_t FrameLayout::reg2(uint8_t brightness) const {
+  if (regOverride_[1] >= 0) return uint16_t(regOverride_[1]);
   uint16_t r = brightness & 0x3F;                          // 6 bits global brightness
-  r |= uint16_t((scan_ - 1) & 0x1F) << 6;                  // 5 bits scan lines - 1
+  r |= uint16_t(scanField() & 0x1F) << 6;                  // 5 bits scan lines - 1
   r |= uint16_t(~(colorBits_ - 10) & 0x3) << 11;           // 2 bits color depth, inverted
   return r;
 }
 
 uint16_t FrameLayout::reg3() const {
+  if (regOverride_[2] >= 0) return uint16_t(regOverride_[2]);
   uint16_t r = uint16_t(gclkMultiplier_ >> 4) << 2;  // x16 GCLK multiplier (x8 when 0)
   r |= 1u << 4;                                      // must be 1 for the matrix to work
   return r;

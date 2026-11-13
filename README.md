@@ -39,6 +39,10 @@ It needs about 135 KB of internal RAM for the two DMA buffers of a 64x64 panel, 
 > instead, or check the driver IC on the back: this library only speaks the
 > SUM2033 protocol.
 
+> **SUM2030GAS2 panels:** the REG2 scan field can be set independently of the
+> stream geometry (`Sum2033Config::scanField`, `Sum2033::setScanField()`), see
+> [SUM2030.md](SUM2030.md) (French) and the diagnostic sketch in `src/main.cpp`.
+
 ### Usage
 
 With the Adafruit_GFX canvas (see `src/main.cpp` for a complete demo):
